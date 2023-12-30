@@ -263,6 +263,10 @@ impl <T> HeldSyncCell<T> {
     /// Sets the value contained in this cell.
     /// This value will only become available once the `update` method is called.
     /// 
+    /// In the case that multiple threads call this method simultaniously,
+    /// the order in which the calls are processed is not defined. However, the final result will
+    /// be the value specified by one of the method calls.
+    ///
     /// - `value` - The new value of the cell.
     ///
     /// # Panicking
@@ -372,6 +376,140 @@ impl <T: Hash> Hash for HeldSyncCell<T> {
 impl <T> From<T> for HeldSyncCell<T> {
     fn from(value: T) -> Self {
         Self::new(value)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use core::panic;
+    use std::{thread, sync::Arc};
+
+    use crate::SyncCell;
+
+    #[test]
+    pub fn test_sync_cell_new() {
+        let _cell = SyncCell::new(1);
+    } 
+
+    #[test]
+    pub fn test_sync_cell_set() {
+        let cell = SyncCell::new(2);
+
+        cell.set(3);
+
+        assert_eq!(3, cell.get())
+    }
+    
+    #[test]
+    pub fn test_sync_cell_get() {
+        let cell = SyncCell::new(4);
+
+        assert_eq!(4, cell.get())
+    }
+    
+    #[test]
+    pub fn test_sync_cell_replace() {
+        let cell = SyncCell::new(2);
+
+        let old = cell.replace(3);
+        
+        assert_eq!(2, old);
+        assert_eq!(3, cell.get())
+    }
+    
+    #[test]
+    #[should_panic]
+    pub fn test_sync_cell_replace_poisoned() {
+        let cell = Arc::new(SyncCell::new(4));
+
+        let cell2 = cell.clone();
+
+        let _ = thread::spawn(move || {
+            let _borrow = cell2.borrow();
+
+            panic!("Intentional panic.");
+        }).join();
+
+        let old = cell.replace(3);
+        
+        assert_ne!(2, old);
+        assert_ne!(3, cell.get())
+    }
+    
+    #[test]
+    pub fn test_sync_cell_into_inner() {
+        let cell = SyncCell::new(4);
+
+        assert_eq!(4, cell.into_inner())
+    }
+    
+    #[test]
+    pub fn test_sync_cell_mutable_borrow() {
+        let cell = SyncCell::new(4);
+
+        let mut borrow = cell.borrow_mut();
+
+        *borrow = 5;
+
+        drop(borrow);
+
+        assert_eq!(5, cell.get())
+    }
+    
+    #[test]
+    #[should_panic]
+    pub fn test_sync_cell_mutable_borrow_poisoned() {
+        let cell = Arc::new(SyncCell::new(4));
+
+        let cell2 = cell.clone();
+
+        let _ = thread::spawn(move || {
+            let _borrow = cell2.borrow();
+
+            panic!("Intentional panic.");
+        }).join();
+
+        let mut borrow = cell.borrow_mut();
+
+        *borrow = 5;
+
+        drop(borrow);
+
+        assert_ne!(5, cell.get())
+    }
+    
+    #[test]
+    #[should_panic]
+    pub fn test_sync_cell_get_poisoned() {
+        let cell = Arc::new(SyncCell::new(4));
+
+        let cell2 = cell.clone();
+
+        let _ = thread::spawn(move || {
+            let _borrow = cell2.borrow();
+
+            panic!("Intentional panic.");
+        }).join();
+
+        assert_ne!(4, cell.get())
+    }
+    
+    #[test]
+    #[should_panic]
+    pub fn test_sync_cell_set_poisoned() {
+        let cell = Arc::new(SyncCell::new(4));
+
+        let cell2 = cell.clone();
+
+        let _ = thread::spawn(move || {
+            let _borrow = cell2.borrow();
+
+            panic!("Intentional panic.");
+        }).join();
+
+        cell.set(5);
+
+        assert_ne!(5, cell.get());
     }
 }
 
