@@ -7,4 +7,7 @@ description = "A collection of easier to use thread-safe types for the creation 
 repository = "https://github.com/Tomaso2468/sync-cell.git"
 keywords = ["sync", "concurrent", "cell"]
 categories = ["concurrency"]
-
+include = [
+    "Cargo.toml",
+    "src/**.rs"
+]
