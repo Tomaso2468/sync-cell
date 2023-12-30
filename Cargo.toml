@@ -1,8 +1,10 @@
 [package]
 name = "sync-cell"
 version = "0.1.0"
+authors = ["Tomaso2468"]
 edition = "2021"
+description = "A collection of easier to use thread-safe types for the creation of larger thread safe systems."
+repository = "https://github.com/Tomaso2468/sync-cell.git"
+keywords = ["sync", "concurrent", "cell"]
+categories = ["concurrency"]
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies]
