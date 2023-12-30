@@ -1,13 +1,23 @@
 [package]
 name = "sync-cell"
 version = "0.2.0"
-authors = ["Tomaso2468"]
+authors = [
+    "Tomas O'Shea <48136416+Tomaso2468@users.noreply.github.com>"
+]
 edition = "2021"
 description = "A collection of easier to use thread-safe types for the creation of larger thread safe systems."
-repository = "https://github.com/Tomaso2468/sync-cell.git"
+repository = "https://github.com/Tomaso2468/sync-cell"
 keywords = ["sync", "concurrent", "cell"]
 categories = ["concurrency"]
 include = [
     "Cargo.toml",
-    "src/**.rs"
+    "LICENSE",
+    "src/**.rs",
+    "README.md",
+    "LICENSE",
 ]
+readme = "README.md"
+homepage = "https://github.com/Tomaso2468/sync-cell"
+license = "BSD-3-Clause"
+resolver = "2"
+
