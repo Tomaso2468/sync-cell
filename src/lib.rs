@@ -1,4 +1,4 @@
-use std::{sync::{RwLock, RwLockReadGuard, RwLockWriteGuard}, cmp::Ordering, hash::{Hash, Hasher}};
+use std::{sync::{RwLock, RwLockReadGuard, RwLockWriteGuard}, cmp::Ordering, hash::{Hash, Hasher}, mem::swap};
 
 /// A mutable memory location that can be modified safely from multiple threads.
 /// This structure is similar to `std::cell::Cell` or `std::cell::RefCell`
@@ -78,9 +78,9 @@ pub struct SyncCell<T: ?Sized> {
 }
 
 impl <T> SyncCell<T> {
-    /// Creates a new `ACell`.
+    /// Creates a new `SyncCell`.
     ///
-    /// - `data` - The initial value of the `ACell`.
+    /// - `data` - The initial value of the `SyncCell`.
     pub const fn new(data: T) -> Self {
         Self {
             data: RwLock::new(data)
@@ -108,6 +108,23 @@ impl <T> SyncCell<T> {
         match self.data.into_inner() {
             Ok(data) => data,
             Err(err) => panic!("Failed to get cell value. Lock was poisoned: {}", err),
+        }
+    }
+
+    /// Replaces the internal value contained in this cell.
+    /// The previous value is returned.
+    ///
+    /// - `value` - The new value of the cell.
+    ///
+    /// # Panicking
+    /// This method will panic if the lock becomes poisoned.
+    pub fn replace(&self, mut value: T) -> T {
+        match self.data.write() {
+            Ok(mut data) => {
+                swap(&mut *data, &mut value);
+                value
+            },
+            Err(err) => panic!("Failed to set cell value. Lock was poisoned: {}", err),
         }
     }
 }
@@ -189,6 +206,153 @@ impl <T: Hash + ?Sized> Hash for SyncCell<T> {
 }
 
 impl <T> From<T> for SyncCell<T> {
+    fn from(value: T) -> Self {
+        Self::new(value)
+    }
+}
+
+/// A cell that holds a value until any changes made are applied by use of the `update` method.
+/// Getting the value or obtaining a reference to the value in this cell will return the value
+/// immediately following the last call to `update`. This allows for mutably altering a value while
+/// keeping a reference for a short amount of time to the old value.
+/// This is useful when you want a method in a structure to be able to modify the structure it is
+/// being called from such as when changing the scene in a game engine.
+///
+/// # Usage
+/// ```
+/// use sync_cell::HeldSyncCell;
+///
+/// let cell = HeldSyncCell::new(0);
+///
+/// // Set the next value of the cell.
+/// cell.set(1);
+///
+/// // Cell continues to hold a value of 0 until the `update` method is called.
+/// assert_eq!(0, cell.get());
+///
+/// cell.update();
+/// assert_eq!(1, cell.get());
+/// ```
+pub struct HeldSyncCell<T> {
+    /// The current value that is made available.
+    current_value: SyncCell<T>,
+    /// The value to use next.
+    next_value: SyncCell<Option<T>>,
+}
+
+impl <T> HeldSyncCell<T> {
+    /// Creates a new `HeldSyncCell`.
+    ///
+    /// - `data` - The initial value of the `HeldSyncCell`.
+    pub const fn new(data: T) -> Self {
+        Self {
+            current_value: SyncCell::new(data),
+            next_value: SyncCell::new(None),
+        }
+    }
+
+    /// Sets the value contained in this cell.
+    /// This value will only become available once the `update` method is called.
+    /// 
+    /// - `value` - The new value of the cell.
+    ///
+    /// # Panicking
+    /// This method will panic if any of the locks become poisoned.
+    pub fn set(&self, value: T) {
+        self.next_value.set(Some(value))
+    }
+
+    /// Retrieves the inner value stored in this `HeldSyncCell`. 
+    /// This will return the most up-to-date value even if `update` has not been called.
+    ///
+    /// # Panicking
+    /// This method will panic if any of the locks become poisoned.
+    pub fn into_inner(self) -> T {
+        self.next_value.into_inner()
+            .unwrap_or(self.current_value.into_inner())
+    }
+
+    /// Borrows a immutable reference to the data stored in this cell.
+    /// This is a reference to the current value of the cell.
+    ///
+    /// # Panicking
+    /// This method will panic if any of the locks become poisoned.
+    pub fn borrow(&self) -> RwLockReadGuard<T> {
+        self.current_value.borrow()
+    }
+    
+    /// Borrows a mutable reference to the data stored in this cell.
+    /// This is a reference to the current value of the cell not the incoming value. Any changes to
+    /// the value will update the current value.
+    ///
+    /// # Panicking
+    /// This method will panic if any of the locks become poisoned.
+    pub fn borrow_mut(&self) -> RwLockWriteGuard<T> {
+        self.current_value.borrow_mut()
+    }
+
+    /// Updates the internal value of this cell.
+    /// This involves replacing the current value with the incoming value if it is available.
+    ///
+    /// # Panicking
+    /// This method will panic if any of the locks become poisoned.
+    pub fn update(&self) {
+        if let Some(next) = self.next_value.replace(None) {
+            self.current_value.set(next);
+        }
+    } 
+}
+
+impl <T: Clone> HeldSyncCell<T> {
+    /// Gets the value contained in this cell.
+    ///
+    /// # Panicking
+    /// This method will panic if any of the locks become poisoned.
+    pub fn get(&self) -> T {
+        self.current_value.get()
+    }
+}
+
+impl <T: Clone> Clone for HeldSyncCell<T> {
+    fn clone(&self) -> Self {
+        Self::new(self.get())
+    }
+}
+
+impl <T: Default> Default for HeldSyncCell<T> {
+    fn default() -> Self {
+        Self::new(T::default())
+    }
+}
+
+impl <T: PartialEq> PartialEq for HeldSyncCell<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.borrow().eq(&*other.borrow())
+    }
+}
+
+impl <T: Eq> Eq for HeldSyncCell<T> {
+}
+
+impl <T: PartialOrd> PartialOrd for HeldSyncCell<T> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.borrow().partial_cmp(&*other.borrow())
+    }
+}
+
+impl <T: Ord> Ord for HeldSyncCell<T> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.borrow().cmp(&*other.borrow())
+    }
+}
+
+impl <T: Hash> Hash for HeldSyncCell<T> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.borrow().hash(state)
+    }
+}
+
+impl <T> From<T> for HeldSyncCell<T> {
     fn from(value: T) -> Self {
         Self::new(value)
     }
