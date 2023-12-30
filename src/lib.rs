@@ -300,6 +300,14 @@ impl <T> HeldSyncCell<T> {
         self.current_value.borrow_mut()
     }
 
+    /// Checks if a new nalue is available that can be applied by calling `update`.
+    ///
+    /// # Panicking
+    /// This method will panic if any of the locks become poisoned.
+    pub fn has_update(&self) -> bool {
+        self.next_value.borrow().is_some()
+    }
+
     /// Updates the internal value of this cell.
     /// This involves replacing the current value with the incoming value if it is available.
     ///
