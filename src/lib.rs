@@ -1,3 +1,12 @@
+//! A module containing easier to use thread-safe types for the creation of larger thread safe
+//! systems.
+//!
+//! ## Included Types
+//! - `SyncCell` - A replacement for `std::cell::RefCell` and `std::cell::Cell` with an easier to
+//! use API than `std::sync::RwLock`.
+//! - `HeldSyncCell` - A cell that maintains a previous value until the `update` method is called
+//! at which point any changes to the value are applied.
+
 use std::{sync::{RwLock, RwLockReadGuard, RwLockWriteGuard}, cmp::Ordering, hash::{Hash, Hasher}, mem::swap};
 
 /// A mutable memory location that can be modified safely from multiple threads.
