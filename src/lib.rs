@@ -384,7 +384,7 @@ mod tests {
     use core::panic;
     use std::{thread, sync::Arc};
 
-    use crate::SyncCell;
+    use crate::{SyncCell, HeldSyncCell};
 
     #[test]
     pub fn test_sync_cell_new() {
@@ -510,6 +510,125 @@ mod tests {
         cell.set(5);
 
         assert_ne!(5, cell.get());
+    }
+
+    #[test]
+    pub fn test_held_sync_cell_new() {
+        let _cell = HeldSyncCell::new(0);
+    }
+    
+    #[test]
+    pub fn test_held_sync_cell_get() {
+        let cell = HeldSyncCell::new(1);
+
+        assert_eq!(1, cell.get())
+    }
+    
+    #[test]
+    pub fn test_held_sync_cell_set_no_update() {
+        let cell = HeldSyncCell::new(1);
+
+        cell.set(2);
+
+        assert_eq!(true, cell.has_update());
+        assert_eq!(1, cell.get())
+    }
+    
+    #[test]
+    pub fn test_held_sync_cell_set_update() {
+        let cell = HeldSyncCell::new(1);
+
+        cell.set(2);
+        cell.update();
+
+        assert_eq!(false, cell.has_update());
+        assert_eq!(2, cell.get())
+    }
+    
+    #[test]
+    pub fn test_held_sync_cell_set_double_update() {
+        let cell = HeldSyncCell::new(1);
+
+        cell.set(2);
+        cell.update();
+        cell.update();
+
+        assert_eq!(false, cell.has_update());
+        assert_eq!(2, cell.get())
+    }
+
+    #[test]
+    pub fn test_held_sync_cell_no_set_update() {
+        let cell = HeldSyncCell::new(1);
+
+        cell.update();
+
+        assert_eq!(false, cell.has_update());
+        assert_eq!(1, cell.get())
+    }
+
+    #[test]
+    pub fn test_held_sync_cell_no_set() {
+        let cell = HeldSyncCell::new(1);
+
+        assert_eq!(false, cell.has_update());
+        assert_eq!(1, cell.get())
+    }
+    
+    #[test]
+    pub fn test_held_sync_cell_into_inner() {
+        let cell = HeldSyncCell::new(4);
+
+        assert_eq!(4, cell.into_inner())
+    }
+    
+    #[test]
+    pub fn test_held_sync_cell_set_into_inner() {
+        let cell = HeldSyncCell::new(4);
+
+        cell.set(5);
+
+        assert_eq!(5, cell.into_inner())
+    }
+    
+    #[test]
+    pub fn test_held_sync_cell_set_update_into_inner() {
+        let cell = HeldSyncCell::new(4);
+
+        cell.set(5);
+        cell.update();
+
+        assert_eq!(5, cell.into_inner())
+    }
+    
+    #[test]
+    pub fn test_held_sync_cell_mutable_borrow() {
+        let cell = HeldSyncCell::new(4);
+
+        let mut borrow = cell.borrow_mut();
+
+        *borrow = 5;
+
+        drop(borrow);
+
+        assert_eq!(5, cell.get())
+    }
+    
+    #[test]
+    pub fn test_held_sync_cell_mutable_borrow_set() {
+        let cell = HeldSyncCell::new(4);
+
+        let mut borrow = cell.borrow_mut();
+
+        *borrow = 5;
+
+        cell.set(6);
+
+        drop(borrow);
+
+        assert_eq!(5, cell.get());
+        cell.update();
+        assert_eq!(6, cell.get());
     }
 }
 
